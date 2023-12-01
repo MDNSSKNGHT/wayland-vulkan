@@ -15,6 +15,7 @@
 #include <wayland-client-core.h>
 #include <wayland-client-protocol.h>
 
+#include "renderer_vk.h"
 #include "xdg-shell-client-protocol.h"
 
 //
@@ -305,6 +306,11 @@ int main(int argc, char *argv[]) {
 	xdg_toplevel_add_listener(g_xdg_toplevel, &g_xdg_toplevel_listener, NULL);
 	xdg_toplevel_set_title(g_xdg_toplevel, "Wclient");
 	wl_surface_commit(g_surface);
+
+	/*
+	 * Vulkan
+	 */
+	renderer_vk_run();
 
 	while (wl_display_dispatch(display)) {
 		if (g_should_close) {

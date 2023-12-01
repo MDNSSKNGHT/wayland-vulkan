@@ -1,7 +1,8 @@
 CFLAGS				=	-g3 -Werror
-SRC					=	main.c xdg-shell-protocol.c
+SRC					=	main.c renderer_vk.c xdg-shell-protocol.c
 LIBS				=	\
-		$(shell pkg-config --cflags --libs wayland-client)
+		$(shell pkg-config --cflags --libs wayland-client) \
+		$(shell pkg-config --cflags --libs vulkan)
 
 xdg-shell-protocol.c:
 	wayland-scanner private-code \
@@ -13,7 +14,7 @@ xdg-shell-client-protocol.h:
 		/usr/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml \
 		xdg-shell-client-protocol.h
 
-main: main.c xdg-shell-protocol.c xdg-shell-client-protocol.h
+main: *.c *.h
 	$(CC) $(CFLAGS) -o $@ $(SRC) $(LIBS)
 
 clean:
