@@ -54,27 +54,27 @@ VkInstance g_vk_instance = VK_NULL_HANDLE;
 VkPhysicalDevice g_vk_physical_device = VK_NULL_HANDLE;
 struct queue_family_indices g_queue_family_indices = {0};
 VkDevice g_vk_device = VK_NULL_HANDLE;
-VkQueue g_graphics_queue = VK_NULL_HANDLE;
+VkQueue g_vk_graphics_queue = VK_NULL_HANDLE;
 
 //
 // functions
 //
 static bool renderer_vk_check_validation_layer_support(void) {
 	uint32_t layer_count = 0;
-	VkLayerProperties *available_layers;
+	VkLayerProperties *vk_available_layers;
 
 	vkEnumerateInstanceLayerProperties(&layer_count, NULL);
-	available_layers = malloc(layer_count * sizeof(VkLayerProperties));
-	vkEnumerateInstanceLayerProperties(&layer_count, available_layers);
+	vk_available_layers = malloc(layer_count * sizeof(VkLayerProperties));
+	vkEnumerateInstanceLayerProperties(&layer_count, vk_available_layers);
 
 	for (int i = 0; i < c_validation_layers_count; i++) {
 		bool layer_found = false;
 		const char *layer_name = c_validation_layers[i];
 
-		for (VkLayerProperties *layer_properties = available_layers;
-				layer_properties < &available_layers[layer_count];
-				++layer_properties) {
-			if (!strcmp(layer_name, layer_properties->layerName)) {
+		for (VkLayerProperties *vk_layer_properties = vk_available_layers;
+				vk_layer_properties < &vk_available_layers[layer_count];
+				vk_layer_properties++) {
+			if (!strcmp(layer_name, vk_layer_properties->layerName)) {
 				layer_found = true;
 				break;
 			}
@@ -85,7 +85,7 @@ static bool renderer_vk_check_validation_layer_support(void) {
 		}
 	}
 
-	free(available_layers);
+	free(vk_available_layers);
 
 	return true;
 }
@@ -97,7 +97,8 @@ static void renderer_vk_create_instance(void) {
 	//uint32_t extension_count = 0;
 	//VkExtensionProperties *extensions;
 
-	if (c_enable_validation_layers && !renderer_vk_check_validation_layer_support()) {
+	if (c_enable_validation_layers &&
+			!renderer_vk_check_validation_layer_support()) {
 		fprintf(stderr, "validation layers requested, but not available!");
 		exit(EXIT_FAILURE);
 	}
@@ -137,29 +138,32 @@ static void renderer_vk_create_instance(void) {
 	}
 }
 
-static void renderer_vk_find_queue_families(VkPhysicalDevice device) {
+static void renderer_vk_find_queue_families(VkPhysicalDevice vk_device) {
 	uint32_t queue_family_count = 0;
-	VkQueueFamilyProperties *queue_families;
+	VkQueueFamilyProperties *vk_queue_families;
 
 	if (g_queue_family_indices.initialized) {
 		return;
 	}
 
-	vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, NULL);
-	queue_families = malloc(queue_family_count * sizeof(VkQueueFamilyProperties));
-	vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, queue_families);
+	vkGetPhysicalDeviceQueueFamilyProperties(vk_device,
+			&queue_family_count, NULL);
+	vk_queue_families = malloc(
+			queue_family_count * sizeof(VkQueueFamilyProperties));
+	vkGetPhysicalDeviceQueueFamilyProperties(vk_device, &queue_family_count,
+			vk_queue_families);
 
 	for (int i = 0; i < queue_family_count; i++) {
-		VkQueueFamilyProperties queue_family = queue_families[i];
+		VkQueueFamilyProperties vk_queue_family = vk_queue_families[i];
 
-		if (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+		if (vk_queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
 			g_queue_family_indices.graphics_family = malloc(sizeof(uint32_t));
 			*g_queue_family_indices.graphics_family = i;
 		}
 	}
 
 	g_queue_family_indices.initialized = true;
-	free(queue_families);
+	free(vk_queue_families);
 }
 
 static void renderer_vk_free_queue_family_indices(void) {
@@ -168,29 +172,29 @@ static void renderer_vk_free_queue_family_indices(void) {
 	}
 }
 
-static bool renderer_vk_is_device_suitable(VkPhysicalDevice device) {
-	renderer_vk_find_queue_families(device);
+static bool renderer_vk_is_device_suitable(VkPhysicalDevice vk_device) {
+	renderer_vk_find_queue_families(vk_device);
 
 	return g_queue_family_indices.graphics_family != NULL;
 }
 
 static void renderer_vk_pick_physical_device(void) {
 	uint32_t device_count = 0;
-	VkPhysicalDevice *devices;
+	VkPhysicalDevice *vk_devices;
 
 	vkEnumeratePhysicalDevices(g_vk_instance, &device_count, NULL);
 	if (device_count == 0) {
 		fprintf(stderr, "failed to find GPUs with Vulkan support!\n");
 		exit(EXIT_FAILURE);
 	}
-	devices = malloc(device_count * sizeof(VkPhysicalDevice));
-	vkEnumeratePhysicalDevices(g_vk_instance, &device_count, devices);
+	vk_devices = malloc(device_count * sizeof(VkPhysicalDevice));
+	vkEnumeratePhysicalDevices(g_vk_instance, &device_count, vk_devices);
 
-	for (VkPhysicalDevice *device = devices;
-			device < &devices[device_count];
-			++device) {
-		if (renderer_vk_is_device_suitable(*device)) {
-			g_vk_physical_device = *device;
+	for (VkPhysicalDevice *vk_device = vk_devices;
+			vk_device < &vk_devices[device_count];
+			vk_device++) {
+		if (renderer_vk_is_device_suitable(*vk_device)) {
+			g_vk_physical_device = *vk_device;
 			break;
 		}
 	}
@@ -202,39 +206,41 @@ static void renderer_vk_pick_physical_device(void) {
 }
 
 static void renderer_vk_create_logical_device(void) {
-	VkDeviceQueueCreateInfo queue_create_info = {0};
-	VkPhysicalDeviceFeatures device_features = {0};
-	VkDeviceCreateInfo create_info = {0};
+	VkDeviceQueueCreateInfo vk_queue_create_info = {0};
+	VkPhysicalDeviceFeatures vk_device_features = {0};
+	VkDeviceCreateInfo vk_create_info = {0};
 	VkResult vk_result;
 	float queue_priority = 1.0f;
 
 	renderer_vk_find_queue_families(g_vk_physical_device);
 
-	queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	queue_create_info.queueFamilyIndex = *g_queue_family_indices.graphics_family;
-	queue_create_info.queueCount = 1;
-	queue_create_info.pQueuePriorities = &queue_priority;
+	vk_queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+	vk_queue_create_info.queueFamilyIndex = *g_queue_family_indices.graphics_family;
+	vk_queue_create_info.queueCount = 1;
+	vk_queue_create_info.pQueuePriorities = &queue_priority;
 
-	create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	create_info.pQueueCreateInfos = &queue_create_info;
-	create_info.queueCreateInfoCount = 1;
-	create_info.pEnabledFeatures = &device_features;
-	create_info.enabledExtensionCount = 0;
+	vk_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	vk_create_info.pQueueCreateInfos = &vk_queue_create_info;
+	vk_create_info.queueCreateInfoCount = 1;
+	vk_create_info.pEnabledFeatures = &vk_device_features;
+	vk_create_info.enabledExtensionCount = 0;
 
 	if (c_enable_validation_layers) {
-		create_info.ppEnabledLayerNames = c_validation_layers;
-		create_info.enabledLayerCount = c_validation_layers_count;
+		vk_create_info.ppEnabledLayerNames = c_validation_layers;
+		vk_create_info.enabledLayerCount = c_validation_layers_count;
 	} else {
-		create_info.enabledLayerCount = 0;
+		vk_create_info.enabledLayerCount = 0;
 	}
 
-	vk_result = vkCreateDevice(g_vk_physical_device, &create_info, NULL, &g_vk_device);
+	vk_result = vkCreateDevice(g_vk_physical_device, &vk_create_info, NULL,
+			&g_vk_device);
 	if (vk_result != VK_SUCCESS) {
 		fprintf(stderr, "failed to create logical device!");
 		exit(EXIT_FAILURE);
 	}
 
-	vkGetDeviceQueue(g_vk_device, *g_queue_family_indices.graphics_family, 0, &g_graphics_queue);
+	vkGetDeviceQueue(g_vk_device, *g_queue_family_indices.graphics_family,
+			0, &g_vk_graphics_queue);
 }
 
 static void renderer_vk_init(void) {
