@@ -43,6 +43,11 @@ const size_t c_enabled_extension_count = ARRAY_SIZE(c_enabled_extension_names);
 // local variables.
 //
 VkInstance g_vk_instance = VK_NULL_HANDLE;
+VkPhysicalDevice g_vk_physical_device = VK_NULL_HANDLE;
+struct {
+	uint32_t *graphics_family;
+	bool initialized;
+} g_queue_family_indices = {0};
 
 //
 // functions
@@ -78,7 +83,7 @@ static bool renderer_vk_check_validation_layer_support(void) {
 	return true;
 }
 
-static void renderer_vk_init(void) {
+static void renderer_vk_create_instance(void) {
 	VkApplicationInfo vk_app_info = {0};
 	VkInstanceCreateInfo vk_create_info = {0};
 	VkResult vk_result;
@@ -125,6 +130,75 @@ static void renderer_vk_init(void) {
 	}
 }
 
+static void renderer_vk_find_queue_families(VkPhysicalDevice device) {
+	uint32_t queue_family_count = 0;
+	VkQueueFamilyProperties *queue_families;
+
+	if (g_queue_family_indices.initialized) {
+		return;
+	}
+
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, NULL);
+	queue_families = malloc(queue_family_count * sizeof(VkQueueFamilyProperties));
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, queue_families);
+
+	for (int i = 0; i < queue_family_count; i++) {
+		VkQueueFamilyProperties queue_family = queue_families[i];
+
+		if (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+			g_queue_family_indices.graphics_family = malloc(sizeof(uint32_t));
+			*g_queue_family_indices.graphics_family = i;
+		}
+	}
+
+	g_queue_family_indices.initialized = true;
+	free(queue_families);
+}
+
+static void renderer_vk_free_queue_family_indices(void) {
+	if (g_queue_family_indices.graphics_family != NULL) {
+		free(g_queue_family_indices.graphics_family);
+	}
+}
+
+static bool renderer_vk_is_device_suitable(VkPhysicalDevice device) {
+	renderer_vk_find_queue_families(device);
+
+	return g_queue_family_indices.graphics_family != NULL;
+}
+
+static void renderer_vk_pick_physical_device(void) {
+	uint32_t device_count = 0;
+	VkPhysicalDevice *devices;
+
+	vkEnumeratePhysicalDevices(g_vk_instance, &device_count, NULL);
+	if (device_count == 0) {
+		fprintf(stderr, "failed to find GPUs with Vulkan support!\n");
+		exit(EXIT_FAILURE);
+	}
+	devices = malloc(device_count * sizeof(VkPhysicalDevice));
+	vkEnumeratePhysicalDevices(g_vk_instance, &device_count, devices);
+
+	for (VkPhysicalDevice *device = devices;
+			device < &devices[device_count];
+			++device) {
+		if (renderer_vk_is_device_suitable(*device)) {
+			g_vk_physical_device = *device;
+			break;
+		}
+	}
+
+	if (g_vk_physical_device == VK_NULL_HANDLE) {
+		fprintf(stderr, "failed to find a suitable GPUs!\n");
+		exit(EXIT_FAILURE);
+	}
+}
+
+static void renderer_vk_init(void) {
+	renderer_vk_create_instance();
+	renderer_vk_pick_physical_device();
+}
+
 static void renderer_vk_init_wayland(struct wl_display *display) {
 }
 
@@ -133,6 +207,7 @@ static void renderer_vk_main_loop(void) {
 
 static void renderer_vk_cleanup(void) {
 	vkDestroyInstance(g_vk_instance, NULL);
+	renderer_vk_free_queue_family_indices();
 }
 
 void renderer_vk_run(void) {
