@@ -1,4 +1,5 @@
 CFLAGS				=	-g3 -Werror
+CFLAGS				+=	$(USER_DEFINES)
 SRC					=	main.c renderer_vk.c xdg-shell-protocol.c
 LIBS				=	\
 		$(shell pkg-config --cflags --libs wayland-client) \
@@ -14,7 +15,7 @@ xdg-shell-client-protocol.h:
 		/usr/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml \
 		xdg-shell-client-protocol.h
 
-main: *.c *.h
+main: *.c xdg-shell-protocol.c xdg-shell-client-protocol.h
 	$(CC) $(CFLAGS) -o $@ $(SRC) $(LIBS)
 
 clean:
