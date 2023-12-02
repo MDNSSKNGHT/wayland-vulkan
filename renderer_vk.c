@@ -38,16 +38,23 @@ const char* const c_enabled_extension_names[] = {
 const size_t c_enabled_extension_count = ARRAY_SIZE(c_enabled_extension_names);
 
 //
+// structures
+//
+struct queue_family_indices {
+	uint32_t *graphics_family;
+	bool initialized;
+};
+
+//
 // global variables
 // g_ to avoid confusion with
 // local variables.
 //
 VkInstance g_vk_instance = VK_NULL_HANDLE;
 VkPhysicalDevice g_vk_physical_device = VK_NULL_HANDLE;
-struct {
-	uint32_t *graphics_family;
-	bool initialized;
-} g_queue_family_indices = {0};
+struct queue_family_indices g_queue_family_indices = {0};
+VkDevice g_vk_device = VK_NULL_HANDLE;
+VkQueue g_graphics_queue = VK_NULL_HANDLE;
 
 //
 // functions
@@ -194,9 +201,46 @@ static void renderer_vk_pick_physical_device(void) {
 	}
 }
 
+static void renderer_vk_create_logical_device(void) {
+	VkDeviceQueueCreateInfo queue_create_info = {0};
+	VkPhysicalDeviceFeatures device_features = {0};
+	VkDeviceCreateInfo create_info = {0};
+	VkResult vk_result;
+	float queue_priority = 1.0f;
+
+	renderer_vk_find_queue_families(g_vk_physical_device);
+
+	queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+	queue_create_info.queueFamilyIndex = *g_queue_family_indices.graphics_family;
+	queue_create_info.queueCount = 1;
+	queue_create_info.pQueuePriorities = &queue_priority;
+
+	create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	create_info.pQueueCreateInfos = &queue_create_info;
+	create_info.queueCreateInfoCount = 1;
+	create_info.pEnabledFeatures = &device_features;
+	create_info.enabledExtensionCount = 0;
+
+	if (c_enable_validation_layers) {
+		create_info.ppEnabledLayerNames = c_validation_layers;
+		create_info.enabledLayerCount = c_validation_layers_count;
+	} else {
+		create_info.enabledLayerCount = 0;
+	}
+
+	vk_result = vkCreateDevice(g_vk_physical_device, &create_info, NULL, &g_vk_device);
+	if (vk_result != VK_SUCCESS) {
+		fprintf(stderr, "failed to create logical device!");
+		exit(EXIT_FAILURE);
+	}
+
+	vkGetDeviceQueue(g_vk_device, *g_queue_family_indices.graphics_family, 0, &g_graphics_queue);
+}
+
 static void renderer_vk_init(void) {
 	renderer_vk_create_instance();
 	renderer_vk_pick_physical_device();
+	renderer_vk_create_logical_device();
 }
 
 static void renderer_vk_init_wayland(struct wl_display *display) {
@@ -206,6 +250,7 @@ static void renderer_vk_main_loop(void) {
 }
 
 static void renderer_vk_cleanup(void) {
+	vkDestroyDevice(g_vk_device, NULL);
 	vkDestroyInstance(g_vk_instance, NULL);
 	renderer_vk_free_queue_family_indices();
 }
